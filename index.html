@@ -38,7 +38,6 @@
     <div class="track"><div class="fill" id="fill"></div></div>
     <dl>
       <dt>Heures écoulées</dt><dd id="elapsed"></dd>
-      <dt>Rythme</dt><dd id="rate"></dd>
       <dt>Prochaine remise à zéro</dt><dd id="next"></dd>
       <dt>Calculé le</dt><dd id="now"></dd>
     </dl>
@@ -118,7 +117,6 @@ function render() {
   document.getElementById("pct").textContent = fmtNum(pct, 0) + " %";
   document.getElementById("fill").style.width = pct + "%";
   document.getElementById("elapsed").textContent = fmtNum(elapsedH, 0) + " h / 168 h";
-  document.getElementById("rate").textContent = fmtNum(100/168, 3) + " % par heure";
   document.getElementById("next").textContent = fmtDate(next);
   document.getElementById("now").textContent = fmtDate(now);
   document.getElementById("cycle").textContent = "Semaine démarrée " + fmtDate(start);
