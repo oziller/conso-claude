@@ -140,15 +140,15 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 render();
-// Rafraîchissement à chaque changement d'heure tant que la page reste ouverte.
-// Un long setTimeout peut être perdu (onglet endormi, mise en veille) : on vérifie
-// toutes les 20 s si l'heure a changé depuis le dernier calcul.
-let lastHourKey = null;
-const hourKey = d => `${d.toDateString()} ${d.getHours()}`;
+// Rafraîchissement à chaque changement de minute tant que la page reste ouverte.
+// On vérifie toutes les 5 s si la minute a changé depuis le dernier calcul
+// (plus fiable qu'un minuteur unique, qui peut dériver si l'onglet est endormi).
+let lastMinuteKey = null;
+const minuteKey = d => `${d.toDateString()} ${d.getHours()}:${d.getMinutes()}`;
 const _render = render;
-render = function () { _render(); lastHourKey = hourKey(new Date()); };
-setInterval(() => { if (hourKey(new Date()) !== lastHourKey) render(); }, 20000);
-lastHourKey = hourKey(new Date());
+render = function () { _render(); lastMinuteKey = minuteKey(new Date()); };
+setInterval(() => { if (minuteKey(new Date()) !== lastMinuteKey) render(); }, 5000);
+lastMinuteKey = minuteKey(new Date());
 
 document.getElementById("refresh").addEventListener("click", render);
 
