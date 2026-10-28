@@ -41,6 +41,7 @@
       <dt>Prochaine remise à zéro</dt><dd id="next"></dd>
       <dt>Calculé le</dt><dd id="now"></dd>
     </dl>
+    <button type="button" id="refresh" style="margin-top:18px;width:100%">Actualiser</button>
   </div>
 
   <div class="card">
@@ -139,14 +140,17 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 render();
-// Rafraîchissement à chaque heure pile (hh:00:00) tant que la page reste ouverte
-function scheduleNextHour() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(now.getHours() + 1, 0, 0, 0);
-  setTimeout(() => { render(); scheduleNextHour(); }, next - now + 500);   // +0,5 s de marge
-}
-scheduleNextHour();
+// Rafraîchissement à chaque changement d'heure tant que la page reste ouverte.
+// Un long setTimeout peut être perdu (onglet endormi, mise en veille) : on vérifie
+// toutes les 20 s si l'heure a changé depuis le dernier calcul.
+let lastHourKey = null;
+const hourKey = d => `${d.toDateString()} ${d.getHours()}`;
+const _render = render;
+render = function () { _render(); lastHourKey = hourKey(new Date()); };
+setInterval(() => { if (hourKey(new Date()) !== lastHourKey) render(); }, 20000);
+lastHourKey = hourKey(new Date());
+
+document.getElementById("refresh").addEventListener("click", render);
 
 // Si l'ordinateur s'est mis en veille, les minuteurs prennent du retard : on recalcule au retour sur l'onglet
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
