@@ -141,7 +141,17 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 render();
-setInterval(render, 60000);   // mise à jour chaque minute si la page reste ouverte
+// Rafraîchissement à chaque heure pile (hh:00:00) tant que la page reste ouverte
+function scheduleNextHour() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(now.getHours() + 1, 0, 0, 0);
+  setTimeout(() => { render(); scheduleNextHour(); }, next - now + 500);   // +0,5 s de marge
+}
+scheduleNextHour();
+
+// Si l'ordinateur s'est mis en veille, les minuteurs prennent du retard : on recalcule au retour sur l'onglet
+document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
 </script>
 </body>
 </html>
