@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conso Claude théorique</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --txt:#1d1d1b; --muted:#6b6a66; --accent:#c96442; --bar:#e8e4dc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1b19; --card:#262522; --txt:#ecebe7; --muted:#a19f99; --accent:#e07a55; --bar:#3a3833; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:32px 16px; }
+  .card { background:var(--card); border-radius:14px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:16px; }
+  h1 { font-size:1.1rem; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:.9rem; margin:0 0 20px; }
+  .big { font-size:3.2rem; font-weight:700; letter-spacing:-.02em; color:var(--accent); line-height:1; }
+  .track { height:12px; background:var(--bar); border-radius:6px; overflow:hidden; margin:18px 0 14px; }
+  .fill { height:100%; background:var(--accent); width:0; transition:width .4s; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; margin:0; font-size:.92rem; }
+  dt { color:var(--muted); }
+  dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+  form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+  label { display:flex; flex-direction:column; font-size:.85rem; color:var(--muted); gap:4px; }
+  select, input, button { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid var(--bar); background:var(--card); color:var(--txt); }
+  button { background:var(--accent); color:#fff; border:none; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--bar); }
+  .msg { font-size:.85rem; color:var(--muted); min-height:1.2em; margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Consommation théorique Claude</h1>
+    <p class="sub" id="cycle"></p>
+    <div class="big" id="pct">–</div>
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <dl>
+      <dt>Heures écoulées</dt><dd id="elapsed"></dd>
+      <dt>Rythme</dt><dd id="rate"></dd>
+      <dt>Prochaine remise à zéro</dt><dd id="next"></dd>
+      <dt>Calculé le</dt><dd id="now"></dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h1>Début de semaine</h1>
+    <form id="f">
+      <label>Jour
+        <select id="day">
+          <option value="1">Lundi</option><option value="2">Mardi</option><option value="3">Mercredi</option>
+          <option value="4">Jeudi</option><option value="5">Vendredi</option><option value="6">Samedi</option>
+          <option value="0">Dimanche</option>
+        </select>
+      </label>
+      <label>Heure <input type="time" id="time" step="60" required></label>
+      <button type="submit">Enregistrer</button>
+      <button type="button" class="ghost" id="reset">Défaut</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </div>
+</main>
+
+<script>
+const DEFAULT = { day: 6, hour: 15, minute: 0 };   // samedi 15h00
+const COOKIE = "claudeWeekStart";
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+const DAYS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+
+function readSettings() {
+  let raw = null;
+  const m = document.cookie.match(new RegExp("(?:^|; )" + COOKIE + "=([^;]*)"));
+  if (m) raw = decodeURIComponent(m[1]);
+  else { try { raw = localStorage.getItem(COOKIE); } catch (e) {} }
+  if (raw) {
+    const [d, h, mi] = raw.split(":").map(Number);
+    if ([d, h, mi].every(Number.isInteger) && d >= 0 && d <= 6 && h >= 0 && h <= 23 && mi >= 0 && mi <= 59)
+      return { day: d, hour: h, minute: mi };
+  }
+  return { ...DEFAULT };
+}
+
+function saveSettings(s) {
+  const v = `${s.day}:${s.hour}:${s.minute}`;
+  document.cookie = `${COOKIE}=${encodeURIComponent(v)}; max-age=${3600*24*365*2}; path=/; SameSite=Lax`;
+  try { localStorage.setItem(COOKIE, v); } catch (e) {}   // secours si cookies bloqués (ex. fichier local)
+}
+
+function clearSettings() {
+  document.cookie = `${COOKIE}=; max-age=0; path=/; SameSite=Lax`;
+  try { localStorage.removeItem(COOKIE); } catch (e) {}
+}
+
+// Dernier début de semaine <= maintenant (heure locale)
+function lastStart(now, s) {
+  const d = new Date(now);
+  d.setHours(s.hour, s.minute, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() - s.day + 7) % 7));
+  if (d > now) d.setDate(d.getDate() - 7);
+  return d;
+}
+
+const pad = n => String(n).padStart(2, "0");
+const fmtDate = d => `${DAYS[d.getDay()]} ${d.getDate()}/${pad(d.getMonth()+1)} à ${d.getHours()}h${pad(d.getMinutes())}`;
+const fmtNum = (n, dec) => n.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+function render() {
+  const s = readSettings();
+  const now = new Date();
+  const start = lastStart(now, s);
+  const next = new Date(start); next.setDate(next.getDate() + 7);
+  // Heures « d'horloge » : ignore le changement d'heure été/hiver (semaine = toujours 168 h)
+  const wall = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
+  const elapsedH = (wall(now) - wall(start)) / 3600000;
+  const pct = Math.min(100, elapsedH / 168 * 100);
+
+  document.getElementById("pct").textContent = fmtNum(pct, 1) + " %";
+  document.getElementById("fill").style.width = pct + "%";
+  document.getElementById("elapsed").textContent = fmtNum(elapsedH, 1) + " h / 168 h";
+  document.getElementById("rate").textContent = fmtNum(100/168, 3) + " % par heure";
+  document.getElementById("next").textContent = fmtDate(next);
+  document.getElementById("now").textContent = fmtDate(now);
+  document.getElementById("cycle").textContent = "Semaine démarrée " + fmtDate(start);
+
+  document.getElementById("day").value = s.day;
+  document.getElementById("time").value = `${pad(s.hour)}:${pad(s.minute)}`;
+}
+
+document.getElementById("f").addEventListener("submit", e => {
+  e.preventDefault();
+  const [h, mi] = document.getElementById("time").value.split(":").map(Number);
+  saveSettings({ day: Number(document.getElementById("day").value), hour: h, minute: mi });
+  document.getElementById("msg").textContent = "Réglage enregistré.";
+  render();
+});
+document.getElementById("reset").addEventListener("click", () => {
+  clearSettings();
+  document.getElementById("msg").textContent = "Retour au défaut : samedi 15h00.";
+  render();
+});
+
+render();
+setInterval(render, 60000);   // mise à jour chaque minute si la page reste ouverte
+</script>
+</body>
+</html>
