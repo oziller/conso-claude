@@ -115,7 +115,7 @@ function render() {
   const elapsedH = (wall(now) - wall(start)) / 3600000;
   const pct = Math.min(100, elapsedH / 168 * 100);
 
-  document.getElementById("pct").textContent = fmtNum(pct, 1) + " %";
+  document.getElementById("pct").textContent = fmtNum(pct, 0) + " %";
   document.getElementById("fill").style.width = pct + "%";
   document.getElementById("elapsed").textContent = fmtNum(elapsedH, 1) + " h / 168 h";
   document.getElementById("rate").textContent = fmtNum(100/168, 3) + " % par heure";
