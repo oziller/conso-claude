@@ -65,7 +65,7 @@
 </main>
 
 <script>
-const DEFAULT = { day: 6, hour: 15, minute: 0 };   // samedi 15h00
+const DEFAULT = { day: 6, hour: 14, minute: 0 };   // samedi 14h00
 const COOKIE = "claudeWeekStart";
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 const DAYS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
@@ -137,7 +137,7 @@ document.getElementById("f").addEventListener("submit", e => {
 });
 document.getElementById("reset").addEventListener("click", () => {
   clearSettings();
-  document.getElementById("msg").textContent = "Retour au défaut : samedi 15h00.";
+  document.getElementById("msg").textContent = "Retour au défaut : samedi 14h00.";
   render();
 });
 
