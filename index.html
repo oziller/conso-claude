@@ -118,6 +118,7 @@ function render() {
   const pct = Math.min(100, elapsedH / 168 * 100);
 
   document.getElementById("pct").textContent = fmtNum(pct, 0) + " %";
+  document.title = fmtNum(pct, 0) + " % · Conso Claude";
   document.getElementById("fill").style.width = pct + "%";
   document.getElementById("elapsed").textContent = fmtNum(elapsedH, 0) + " h / 168 h";
   document.getElementById("next").textContent = fmtDate(next);
