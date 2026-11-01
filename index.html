@@ -143,11 +143,11 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 render();
-// Rafraîchissement à chaque quart d'heure (hh:00, hh:15, hh:30, hh:45) tant que la page reste ouverte.
-// On vérifie toutes les 5 s si le quart d'heure a changé depuis le dernier calcul
+// Rafraîchissement à chaque heure pile (hh:00) tant que la page reste ouverte.
+// On vérifie toutes les 5 s si l'heure a changé depuis le dernier calcul
 // (plus fiable qu'un minuteur unique, qui peut dériver si l'onglet est endormi).
 let lastMinuteKey = null;
-const minuteKey = d => `${d.toDateString()} ${d.getHours()}:${Math.floor(d.getMinutes() / 15)}`;   // tranche de 15 min
+const minuteKey = d => `${d.toDateString()} ${d.getHours()}`;   // change à chaque heure pile
 const _render = render;
 render = function () { _render(); lastMinuteKey = minuteKey(new Date()); };
 setInterval(() => { if (minuteKey(new Date()) !== lastMinuteKey) render(); }, 5000);
