@@ -18,8 +18,9 @@
   .big { font-size:3.2rem; font-weight:700; letter-spacing:-.02em; color:var(--accent); line-height:1; }
   .track { position:relative; height:12px; background:var(--bar); border-radius:6px; overflow:hidden; margin:18px 0 4px; }
   .tick { position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:var(--card); opacity:.85; }
-  .tick-labels { position:relative; height:1.2em; margin-bottom:14px; font-size:.72rem; color:var(--muted); }
-  .tick-label { position:absolute; transform:translateX(-50%); white-space:nowrap; }
+  .tick-labels { position:relative; height:2.4em; margin-bottom:14px; font-size:.72rem; color:var(--muted); }
+  .tick-label { position:absolute; transform:translateX(-50%); white-space:nowrap; text-align:center; line-height:1.2; }
+  .tick-label small { display:block; font-size:.62rem; opacity:.8; font-variant-numeric:tabular-nums; }
   .tick-label.past { color:var(--txt); }
   .fill { height:100%; background:var(--accent); width:0; transition:width .4s; }
   dl { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; margin:0; font-size:.92rem; }
@@ -136,7 +137,7 @@ function render() {
     const t = document.createElement("span"); t.className = "tick"; t.style.left = pos + "%";
     ticks.appendChild(t);
     const l = document.createElement("span"); l.className = "tick-label"; l.style.left = pos + "%";
-    l.textContent = DAYS[m.getDay()].slice(0, 3) + ".";
+    l.innerHTML = `${DAYS[m.getDay()].slice(0, 3)}.<small>${fmtNum(pos, 0)} %</small>`;
     if (m <= now) l.classList.add("past");
     labels.appendChild(l);
   }
