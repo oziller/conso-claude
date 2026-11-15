@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conso Claude théorique</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#c96442">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Conso Claude">
 <style>
   :root { --bg:#f6f5f2; --card:#fff; --txt:#1d1d1b; --muted:#6b6a66; --accent:#c96442; --bar:#e8e4dc; }
   @media (prefers-color-scheme: dark) {
@@ -178,6 +184,11 @@ document.getElementById("refresh").addEventListener("click", render);
 
 // Si l'ordinateur s'est mis en veille, les minuteurs prennent du retard : on recalcule au retour sur l'onglet
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+
+// PWA : enregistrement du service worker (installation + hors ligne)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 </script>
 </body>
 </html>
