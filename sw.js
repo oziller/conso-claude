@@ -1,7 +1,7 @@
 // Service worker : permet l'installation et le fonctionnement hors ligne.
 // Stratégie « réseau d'abord » : la dernière version publiée est servie dès qu'il y a du réseau,
 // le cache ne sert qu'en secours hors ligne.
-const CACHE = "conso-claude-v1";
+const CACHE = "conso-claude-v2";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png"];
 

@@ -40,25 +40,40 @@
   dd.now { display:flex; justify-content:flex-end; align-items:center; gap:6px; }
   button.icon { background:transparent; color:var(--muted); border:none; padding:2px; line-height:0; border-radius:6px; }
   button.icon:hover { color:var(--accent); background:var(--bar); }
+  .duo { display:flex; align-items:baseline; gap:20px; flex-wrap:wrap; }
+  .duo .lbl { display:block; font-size:.75rem; color:var(--muted); font-weight:500; letter-spacing:0; margin-bottom:6px; }
+  .big.theo { color:var(--muted); font-size:2rem; }
+  .marker { position:absolute; top:-3px; bottom:-3px; width:3px; margin-left:-1.5px; background:var(--txt); border-radius:2px; display:none; }
+  .track.with-real { overflow:visible; }
+  .track.with-real .fill { border-radius:6px; }
+  .warn { color:var(--accent); font-size:.85rem; margin:12px 0 0; }
+  .warn:empty { display:none; }
+  form.cfg input { flex:1 1 100%; }
   .msg { font-size:.85rem; color:var(--muted); min-height:1.2em; margin-top:8px; }
 </style>
 </head>
 <body>
 <main>
   <div class="card">
-    <h1>Consommation théorique Claude</h1>
+    <h1 id="h1">Consommation théorique Claude</h1>
     <p class="sub" id="cycle"></p>
-    <div class="big" id="pct">–</div>
-    <div class="track"><div class="fill" id="fill"></div><div id="ticks"></div></div>
+    <div class="duo">
+      <div id="real-box" hidden><span class="lbl">Réelle</span><div class="big" id="real-pct">–</div></div>
+      <div><span class="lbl" id="pct-lbl" hidden>Théorique</span><div class="big" id="pct">–</div></div>
+    </div>
+    <div class="track" id="track"><div class="fill" id="fill"></div><div id="ticks"></div><span class="marker" id="marker" title="Théorique"></span></div>
     <div class="tick-labels" id="tick-labels"></div>
     <dl>
+      <dt id="gap-dt" hidden>Écart</dt><dd id="gap" hidden></dd>
+      <dt id="session-dt" hidden>Session 5 h</dt><dd id="session" hidden></dd>
       <dt>Heures écoulées</dt><dd id="elapsed"></dd>
       <dt>Prochaine remise à zéro</dt><dd id="next"></dd>
       <dt>Actualisé le</dt><dd class="now"><span id="now"></span><button type="button" id="refresh" class="icon" title="Actualiser" aria-label="Actualiser"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></button></dd>
     </dl>
+    <p class="warn" id="warn"></p>
   </div>
 
-  <div class="card">
+  <div class="card" id="start-card">
     <h1>Début de semaine</h1>
     <form id="f">
       <label>Jour
@@ -73,6 +88,18 @@
       <button type="button" class="ghost" id="reset">Défaut</button>
     </form>
     <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h1>Consommation réelle <span style="font-weight:400;color:var(--muted)">(facultatif)</span></h1>
+    <p class="sub" style="margin-bottom:12px">Via votre webhook n8n. Le jeton reste sur cet appareil.</p>
+    <form id="cfg" class="cfg">
+      <label style="flex:1 1 100%">URL du webhook <input type="url" id="cfg-url" placeholder="https://…/webhook/conso-claude"></label>
+      <label style="flex:1 1 100%">Jeton <input type="password" id="cfg-token" autocomplete="off" placeholder="X-Conso-Token"></label>
+      <button type="submit">Enregistrer</button>
+      <button type="button" class="ghost" id="cfg-clear">Effacer</button>
+    </form>
+    <div class="msg" id="cfg-msg"></div>
   </div>
 </main>
 
@@ -119,22 +146,85 @@ const pad = n => String(n).padStart(2, "0");
 const fmtDate = d => `${DAYS[d.getDay()]} ${d.getDate()}/${pad(d.getMonth()+1)} à ${d.getHours()}h${pad(d.getMinutes())}`;
 const fmtNum = (n, dec) => n.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
+// ---- Consommation réelle (facultatif, via webhook n8n) ----
+const REAL_CFG = "consoRealCfg", REAL_LAST = "consoRealLast";
+const DEFAULT_URL = "https://n8n.ziller.fr/webhook/conso-claude";
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let real = lsGet(REAL_LAST);   // dernière réponse reçue (affichée hors ligne)
+let realErr = "", lastFetch = 0;
+
+async function fetchReal(force) {
+  const cfg = lsGet(REAL_CFG);
+  if (!cfg || !cfg.url || !cfg.token) { real = null; realErr = ""; render(); return; }
+  if (!force && Date.now() - lastFetch < 60000) return;   // pas plus d'un appel par minute
+  lastFetch = Date.now();
+  try {
+    const r = await fetch(cfg.url, { headers: { "X-Conso-Token": cfg.token }, cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    if (typeof j.seven_day_pct !== "number" || !j.seven_day_resets_at) throw new Error("Réponse inattendue");
+    real = j; realErr = ""; lsSet(REAL_LAST, j);
+  } catch (e) {
+    realErr = "Consommation réelle indisponible : " + (e.message || e);
+  }
+  render();
+}
+
+// Bornes de la semaine : calées sur Anthropic si la conso réelle est connue, sinon sur le réglage manuel
+function week(now) {
+  if (real && real.seven_day_resets_at) {
+    const next = new Date(real.seven_day_resets_at);
+    while (next <= now) next.setDate(next.getDate() + 7);   // donnée périmée (hors ligne)
+    const start = new Date(next); start.setDate(start.getDate() - 7);
+    return { start, next, auto: true };
+  }
+  const start = lastStart(now, readSettings());
+  const next = new Date(start); next.setDate(next.getDate() + 7);
+  return { start, next, auto: false };
+}
+
+const $ = id => document.getElementById(id);
+const show = (ids, on) => ids.forEach(id => { $(id).hidden = !on; });
+const fmtTime = d => `${d.getHours()}h${pad(d.getMinutes())}`;
+
 function render() {
   const s = readSettings();
   const now = new Date();
-  const start = lastStart(now, s);
-  const next = new Date(start); next.setDate(next.getDate() + 7);
+  const { start, next, auto } = week(now);
   // Heures « d'horloge » : ignore le changement d'heure été/hiver (semaine = toujours 168 h)
   const wall = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
-  const elapsedH = (wall(now) - wall(start)) / 3600000;
+  const elapsedH = Math.max(0, (wall(now) - wall(start)) / 3600000);
   const pct = Math.min(100, elapsedH / 168 * 100);
+  const hasReal = !!(real && auto);
 
-  document.getElementById("pct").textContent = fmtNum(pct, 0) + " %";
-  document.title = fmtNum(pct, 0) + " % · Conso Claude";
-  document.getElementById("fill").style.width = pct + "%";
+  $("pct").textContent = fmtNum(pct, 0) + " %";
+  $("pct").classList.toggle("theo", hasReal);
+  show(["real-box", "pct-lbl", "gap-dt", "gap"], hasReal);
+  $("h1").textContent = hasReal ? "Consommation Claude" : "Consommation théorique Claude";
+  $("track").classList.toggle("with-real", hasReal);
+  $("marker").style.display = hasReal ? "block" : "none";
+  $("start-card").hidden = hasReal;
+
+  if (hasReal) {
+    const rp = Math.max(0, Math.min(100, real.seven_day_pct));
+    $("real-pct").textContent = fmtNum(rp, 0) + " %";
+    $("fill").style.width = rp + "%";
+    $("marker").style.left = pct + "%";
+    const g = Math.round(rp) - Math.round(pct);
+    $("gap").textContent = g === 0 ? "dans le rythme" : (g < 0 ? `${-g} pt${g < -1 ? "s" : ""} de marge` : `${g} pt${g > 1 ? "s" : ""} d'avance sur le rythme`);
+    document.title = `${fmtNum(rp, 0)} % / ${fmtNum(pct, 0)} % · Conso Claude`;
+  } else {
+    $("fill").style.width = pct + "%";
+    document.title = fmtNum(pct, 0) + " % · Conso Claude";
+  }
+
+  const sess = hasReal && typeof real.five_hour_pct === "number";
+  show(["session-dt", "session"], sess);
+  if (sess) $("session").textContent = fmtNum(real.five_hour_pct, 0) + " %" + (real.five_hour_resets_at ? " · fin " + fmtTime(new Date(real.five_hour_resets_at)) : "");
 
   // Jalons : un trait à chaque minuit de la semaine, avec le jour qui commence
-  const ticks = document.getElementById("ticks"), labels = document.getElementById("tick-labels");
+  const ticks = $("ticks"), labels = $("tick-labels");
   ticks.innerHTML = ""; labels.innerHTML = "";
   const m = new Date(start); m.setHours(24, 0, 0, 0);   // premier minuit après le début
   for (; m < next; m.setDate(m.getDate() + 1)) {
@@ -147,13 +237,25 @@ function render() {
     if (m <= now) l.classList.add("past");
     labels.appendChild(l);
   }
-  document.getElementById("elapsed").textContent = fmtNum(elapsedH, 0) + " h / 168 h";
-  document.getElementById("next").textContent = fmtDate(next);
-  document.getElementById("now").textContent = fmtDate(now);
-  document.getElementById("cycle").textContent = "Semaine démarrée " + fmtDate(start);
+  $("elapsed").textContent = fmtNum(elapsedH, 0) + " h / 168 h";
+  $("next").textContent = fmtDate(next);
+  $("now").textContent = fmtDate(now);
+  $("cycle").textContent = "Semaine démarrée " + fmtDate(start) + (auto ? " (date Anthropic)" : "");
 
-  document.getElementById("day").value = s.day;
-  document.getElementById("time").value = `${pad(s.hour)}:${pad(s.minute)}`;
+  // Avertissements : erreur d'appel, données anciennes, fin de connexion n8n proche
+  const warns = [];
+  if (realErr) warns.push(realErr + (real ? " — dernière valeur connue affichée." : ""));
+  else if (hasReal && real.fetched_at && now - new Date(real.fetched_at) > 2 * 3600000)
+    warns.push("Valeur réelle relevée le " + fmtDate(new Date(real.fetched_at)) + ".");
+  if (hasReal && real.connection_expires_at) {
+    const days = (new Date(real.connection_expires_at) - now) / 86400000;
+    if (days < 5) warns.push(days <= 0 ? "Connexion n8n ↔ Claude expirée : lancez reconnect-n8n.ps1."
+      : `Connexion n8n ↔ Claude à renouveler avant le ${fmtDate(new Date(real.connection_expires_at))} (reconnect-n8n.ps1).`);
+  }
+  $("warn").textContent = warns.join(" ");
+
+  $("day").value = s.day;
+  $("time").value = `${pad(s.hour)}:${pad(s.minute)}`;
 }
 
 document.getElementById("f").addEventListener("submit", e => {
@@ -169,21 +271,41 @@ document.getElementById("reset").addEventListener("click", () => {
   render();
 });
 
+// Configuration de la conso réelle
+(function initCfg() {
+  const cfg = lsGet(REAL_CFG) || {};
+  $("cfg-url").value = cfg.url || DEFAULT_URL;
+  $("cfg-token").value = cfg.token || "";
+})();
+$("cfg").addEventListener("submit", e => {
+  e.preventDefault();
+  const url = $("cfg-url").value.trim(), token = $("cfg-token").value.trim();
+  if (!url || !token) { $("cfg-msg").textContent = "Renseignez l'URL et le jeton."; return; }
+  lsSet(REAL_CFG, { url, token }); lsSet(REAL_LAST, null); real = null;
+  $("cfg-msg").textContent = "Enregistré, interrogation en cours…";
+  fetchReal(true).then(() => { $("cfg-msg").textContent = realErr ? realErr : "Connexion OK."; });
+});
+$("cfg-clear").addEventListener("click", () => {
+  lsSet(REAL_CFG, null); lsSet(REAL_LAST, null); real = null; realErr = "";
+  $("cfg-token").value = ""; $("cfg-msg").textContent = "Consommation réelle désactivée.";
+  render();
+});
+
 render();
+fetchReal(true);
 // Rafraîchissement à chaque heure pile (hh:00) tant que la page reste ouverte.
 // On vérifie toutes les 5 s si l'heure a changé depuis le dernier calcul
 // (plus fiable qu'un minuteur unique, qui peut dériver si l'onglet est endormi).
-let lastMinuteKey = null;
-const minuteKey = d => `${d.toDateString()} ${d.getHours()}`;   // change à chaque heure pile
-const _render = render;
-render = function () { _render(); lastMinuteKey = minuteKey(new Date()); };
-setInterval(() => { if (minuteKey(new Date()) !== lastMinuteKey) render(); }, 5000);
-lastMinuteKey = minuteKey(new Date());
+let lastHourKey = new Date().toDateString() + new Date().getHours();
+setInterval(() => {
+  const k = new Date().toDateString() + new Date().getHours();
+  if (k !== lastHourKey) { lastHourKey = k; render(); fetchReal(true); }
+}, 5000);
 
-document.getElementById("refresh").addEventListener("click", render);
+$("refresh").addEventListener("click", () => { render(); fetchReal(true); });
 
-// Si l'ordinateur s'est mis en veille, les minuteurs prennent du retard : on recalcule au retour sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+// Retour sur l'onglet / l'appli (veille, changement d'appli) : on recalcule
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { render(); fetchReal(false); } });
 
 // PWA : enregistrement du service worker (installation + hors ligne)
 if ("serviceWorker" in navigator) {
