@@ -11,9 +11,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Conso Claude">
 <style>
-  :root { --bg:#f6f5f2; --card:#fff; --txt:#1d1d1b; --muted:#6b6a66; --accent:#c96442; --bar:#e8e4dc; }
+  :root { --bg:#f6f5f2; --card:#fff; --txt:#1d1d1b; --muted:#6b6a66; --accent:#c96442; --bar:#e8e4dc; --ahead:#b9d6f2; --ahead-txt:#3f78ad; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#1c1b19; --card:#262522; --txt:#ecebe7; --muted:#a19f99; --accent:#e07a55; --bar:#3a3833; }
+    :root { --bg:#1c1b19; --card:#262522; --txt:#ecebe7; --muted:#a19f99; --accent:#e07a55; --bar:#3a3833; --ahead:#3d5a78; --ahead-txt:#8fbbe6; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -43,9 +43,12 @@
   .duo { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
   .duo .lbl { display:block; font-size:.75rem; color:var(--muted); font-weight:500; letter-spacing:0; margin-bottom:6px; }
   .big.theo { color:var(--muted); font-size:2rem; }
-  .marker { position:absolute; top:-3px; bottom:-3px; width:3px; margin-left:-1.5px; background:var(--txt); border-radius:2px; display:none; }
+  .marker { position:absolute; z-index:3; top:-3px; bottom:-3px; width:3px; margin-left:-1.5px; background:var(--txt); border-radius:2px; display:none; }
   .track.with-real { overflow:visible; }
-  .track.with-real .fill { border-radius:6px; }
+  .track.with-real .fill { border-radius:6px; position:relative; z-index:1; }
+  .gapfill { position:absolute; top:3px; bottom:3px; left:0; width:0; background:var(--ahead); border-radius:0 3px 3px 0; display:none; }
+  .big.margin { font-size:1.5rem; color:var(--ahead-txt); }
+  .big.margin.over { color:var(--accent); }
   .warn { color:var(--accent); font-size:.85rem; margin:12px 0 0; }
   .warn:empty { display:none; }
   form.cfg input { flex:1 1 100%; }
@@ -60,11 +63,11 @@
     <div class="duo">
       <div id="real-box" hidden><span class="lbl">Réelle</span><div class="big" id="real-pct">–</div></div>
       <div><span class="lbl" id="pct-lbl" hidden>Théorique</span><div class="big" id="pct">–</div></div>
+      <div id="margin-box" hidden><span class="lbl" id="margin-lbl">Marge</span><div class="big margin" id="margin">–</div></div>
     </div>
-    <div class="track" id="track"><div class="fill" id="fill"></div><div id="ticks"></div><span class="marker" id="marker" title="Théorique"></span></div>
+    <div class="track" id="track"><div class="fill" id="fill"></div><div class="gapfill" id="gapfill"></div><div id="ticks" style="position:absolute;inset:0;z-index:2"></div><span class="marker" id="marker" title="Théorique"></span></div>
     <div class="tick-labels" id="tick-labels"></div>
     <dl>
-      <dt id="gap-dt" hidden>Écart</dt><dd id="gap" hidden></dd>
       <dt id="session-dt" hidden>Session 5 h</dt><dd id="session" hidden></dd>
       <dt>Heures écoulées</dt><dd id="elapsed"></dd>
       <dt>Prochaine remise à zéro</dt><dd id="next"></dd>
@@ -200,7 +203,7 @@ function render() {
 
   $("pct").textContent = fmtNum(pct, 0) + " %";
   $("pct").classList.toggle("theo", hasReal);
-  show(["real-box", "pct-lbl", "gap-dt", "gap"], hasReal);
+  show(["real-box", "pct-lbl", "margin-box"], hasReal);
   $("h1").textContent = hasReal ? "Consommation Claude" : "Consommation théorique Claude";
   $("track").classList.toggle("with-real", hasReal);
   $("marker").style.display = hasReal ? "block" : "none";
@@ -211,11 +214,19 @@ function render() {
     $("real-pct").textContent = fmtNum(rp, 0) + " %";
     $("fill").style.width = rp + "%";
     $("marker").style.left = pct + "%";
+    // Prolongement bleu clair du réel jusqu'à la position théorique (marge restante)
+    const gf = $("gapfill");
+    gf.style.display = pct > rp ? "block" : "none";
+    gf.style.left = `calc(${rp}% - 3px)`;   // passe sous l'arrondi de la barre orange
+    gf.style.width = `calc(${pct - rp}% + 3px)`;
     const g = Math.round(rp) - Math.round(pct);
-    $("gap").textContent = g === 0 ? "dans le rythme" : (g < 0 ? `${-g} pt${g < -1 ? "s" : ""} de marge` : `${g} pt${g > 1 ? "s" : ""} d'avance sur le rythme`);
+    $("margin-lbl").textContent = g > 0 ? "Dépassement" : "Marge";
+    $("margin").textContent = (g > 0 ? "+" : "") + Math.abs(g) + (Math.abs(g) > 1 ? " pts" : " pt");
+    $("margin").classList.toggle("over", g > 0);
     document.title = `${fmtNum(rp, 0)} % / ${fmtNum(pct, 0)} % · Conso Claude`;
   } else {
     $("fill").style.width = pct + "%";
+    $("gapfill").style.display = "none";
     document.title = fmtNum(pct, 0) + " % · Conso Claude";
   }
 
