@@ -234,18 +234,27 @@ function render() {
   show(["session-dt", "session"], sess);
   if (sess) $("session").textContent = fmtNum(real.five_hour_pct, 0) + " %" + (real.five_hour_resets_at ? " · fin " + fmtTime(new Date(real.five_hour_resets_at)) : "");
 
-  // Jalons : un trait à chaque minuit de la semaine, avec le jour qui commence
+  // Jalons : un trait à chaque minuit ; le jour est écrit au milieu de sa tranche,
+  // avec le % théorique atteint à la fin de ce jour
   const ticks = $("ticks"), labels = $("tick-labels");
   ticks.innerHTML = ""; labels.innerHTML = "";
+  const posOf = d => (wall(d) - wall(start)) / 3600000 / 168 * 100;
+  const bounds = [new Date(start)];
   const m = new Date(start); m.setHours(24, 0, 0, 0);   // premier minuit après le début
-  for (; m < next; m.setDate(m.getDate() + 1)) {
-    const pos = (wall(m) - wall(start)) / 3600000 / 168 * 100;
-    if (pos <= 0 || pos >= 100) continue;
-    const t = document.createElement("span"); t.className = "tick"; t.style.left = pos + "%";
+  for (; m < next; m.setDate(m.getDate() + 1)) bounds.push(new Date(m));
+  bounds.push(new Date(next));
+  bounds.slice(1, -1).forEach(b => {
+    const t = document.createElement("span"); t.className = "tick"; t.style.left = posOf(b) + "%";
     ticks.appendChild(t);
-    const l = document.createElement("span"); l.className = "tick-label"; l.style.left = pos + "%";
-    l.innerHTML = `${DAYS[m.getDay()].slice(0, 3)}.<small>${fmtNum(pos, 0)} %</small>`;
-    if (m <= now) l.classList.add("past");
+  });
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const a = bounds[i], z = bounds[i + 1];
+    // la première tranche, si elle ne commence pas à minuit, est la fin du jour de la remise à zéro : pas d'étiquette
+    if (i === 0 && (a.getHours() || a.getMinutes())) continue;
+    const l = document.createElement("span"); l.className = "tick-label";
+    l.style.left = (posOf(a) + posOf(z)) / 2 + "%";
+    l.innerHTML = `${DAYS[a.getDay()].slice(0, 3)}.<small>${fmtNum(posOf(z), 0)} %</small>`;
+    if (z <= now) l.classList.add("past");
     labels.appendChild(l);
   }
   $("elapsed").textContent = fmtNum(elapsedH, 0) + " h / 168 h";
